@@ -1,0 +1,55 @@
+{
+  "name": "hydra-pix-ai.com",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "api:dev": "node server.js",
+    "api:start": "node server.js",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --config eslint.config.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.103.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "form-data": "^4.0.5",
+    "multer": "^2.1.1",
+    "next": "16.2.3",
+    "postcss": "^8.5.10",
+    "python-dotenv": "^0.0.1-security",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "replicate": "^1.4.0",
+    "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/postcss": "^4",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "16.2.3",
+    "eslint-plugin-react": "^7.37.5",
+    "globals": "^17.5.0",
+    "prettier": "3.8.3",
+    "tailwindcss": "^4.2.2"
+  },
+  "description": "This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).",
+  "main": "server.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitlab.com/wgu-gitlab-environment/student-repos/whelqui/d424-software-engineering-capstone.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://gitlab.com/wgu-gitlab-environment/student-repos/whelqui/d424-software-engineering-capstone/issues"
+  },
+  "homepage": "https://gitlab.com/wgu-gitlab-environment/student-repos/whelqui/d424-software-engineering-capstone#readme"
+}

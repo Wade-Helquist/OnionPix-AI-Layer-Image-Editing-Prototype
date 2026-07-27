@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;700"
+      rel="stylesheet"
+    />
+    <title>Hydra-Pix Head Selector</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @keyframes gentleRotate {
+        0% {
+          transform: rotate(-2deg);
+        }
+        50% {
+          transform: rotate(2deg);
+        }
+        100% {
+          transform: rotate(-2deg);
+        }
+      }
+
+      .rotating-title {
+        display: inline-block;
+        animation: gentleRotate 2.6s ease-in-out infinite;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="w-full mt-8 px-12">
+      <h1
+        class="text-left text-2xl font-bold mb-2"
+        style="font-family: &quot;Pixelify Sans&quot;, cursive"
+      >
+        Hydra-Pix Head Selector
+      </h1>
+      <input
+        id="upload-input"
+        type="file"
+        accept="image/*"
+        class="block mt-2 mb-4"
+      />
+      <div class="flex flex-row items-start gap-8">
+        <!-- Main canvas + controls -->
+        <div class="flex flex-col items-start">
+          <canvas
+            id="main-canvas"
+            width="500"
+            height="500"
+            class="border border-black bg-gray-100"
+          ></canvas>
+          <div class="flex flex-row gap-3 mt-4">
+            <label class="flex flex-col items-start">
+              <select
+                id="mode"
+                class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-700 transition"
+                aria-label="mode"
+              >
+                <option value="Extract" selected>Extract Subject</option>
+                <option value="Remove">Remove Subject</option>
+                <option value="Background">Extract Background</option>
+              </select>
+            </label>
+            <button
+              id="submit"
+              class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition"
+            >
+              Submit
+            </button>
+          </div>
+        </div>
+        <!-- Preview canvases aligned to main canvas top/bottom -->
+        <div class="h-[500px] flex flex-col justify-start">
+          <div class="flex flex-row gap-4 h-full">
+            <!-- Preview Column -->
+            <div
+              id="preview-column"
+              class="flex h-full w-[250px] flex-col items-center text-center"
+            >
+              <span
+                id="preview-canvas-text"
+                class="text-lg font-bold mb-2 rotating-title"
+                style="
+                  font-family:
+                    Pixelify Sans,
+                    cursive;
+                "
+                >Title</span
+              >
+              <canvas
+                id="preview-canvas"
+                width="250"
+                height="250"
+                class="border border-black bg-white"
+              ></canvas>
+              <span
+                id="preview-title"
+                class="text-lg font-bold mb-2"
+                style="
+                  font-family:
+                    Pixelify Sans,
+                    cursive;
+                "
+              ></span>
+              <button
+                id="preview-extend-cleanup"
+                class="px-4 py-2 border-b-8 border-white bg-amber-500 text-white rounded hover:bg-amber-600 transition"
+              >
+                Extend &amp; Cleanup ~$0.04
+              </button>
+              <button
+                id="save-to-file-button"
+                class="px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition"
+              >
+                Save To File
+              </button>
+            </div>
+            <!-- Library-->
+            <div
+              id="library-column"
+              class="flex h-full w-[250px] flex-col items-center text-center"
+            >
+              <span
+                id="library-title"
+                class="text-lg font-bold mb-2"
+                style="
+                  font-family:
+                    Pixelify Sans,
+                    cursive;
+                "
+              >
+                Library</span
+              >
+              <canvas
+                id="library-canvas"
+                width="250"
+                height="250"
+                class="border border-dashed border-purple-600 bg-gray-50 mb-2"
+              ></canvas>  
+              <input
+                id="load-file-to-add"
+                type="file"
+                accept="image/*"
+                class="mx-auto block w-full max-w-[250px] text-sm text-gray-900 file:mr-3 file:rounded file:border-0 file:bg-purple-500 file:px-4 file:py-2 file:text-white hover:file:bg-purple-600"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const mainCanvas = document.getElementById("main-canvas");
+      const mainCtx = mainCanvas.getContext("2d");
+      const input = document.getElementById("upload-input");
+      const mode = document.getElementById("mode");
+      const submitButton = document.getElementById("submit");
+
+      const previewColumn = document.getElementById("preview-column");
+      const previewCanvas = document.getElementById("preview-canvas");
+      const previewCanvasText = document.getElementById("preview-canvas-text");
+      const previewTitle = document.getElementById("preview-title");
+      const extendCleanupButton = document.getElementById("preview-extend-cleanup");
+      const saveToFileButton = document.getElementById("save-to-file-button");
+
+      const libraryColumn = document.getElementById("library-column");
+      const libraryCanvas = document.getElementById("library-canvas");
+      const loadFileToAddButton = document.getElementById("load-file-to-add");
+      const libraryInstruction = document.getElementById("library-instruction-text");
+
+      let selectedSourceImageUrl = "";
+      let latestExtractStepUrl = "";
+      let savedAddImageUrl = "";
+      let previewTitleText = "";
+      let previewLabelText = "";
+      let previewLabelRequestId = 0;
+      let previewRect = [0, 0, 0, 0];
+
+      let currentImage;
+      let scale = 1;
+      let offsetX = 0;
+      let offsetY = 0;
+      let isDrawing = false;
+      let startX = 0;
+      let startY = 0;
+      let endX = 0;
+      let endY = 0;
+
+      previewColumn.style.display = "none";
+      libraryColumn.style.display = "none";
+      mode.style.display = "none";
+      submitButton.style.display = "none";
+      extendCleanupButton.style.display = "none";
+      saveToFileButton.style.display = "none";
+
+      function sanitizeDisplayTitle(value) {
+        return String(value || "").replace(/\s+/g, " ").trim();
+      }
+
+      function titleCaseFromLabel(label) {
+        const clean = sanitizeDisplayTitle(label).toLowerCase();
+        if (!clean) return "";
+        return clean
+          .split(" ")
+          .filter(Boolean)
+          .map((word) => word[0].toUpperCase() + word.slice(1))
+          .join(" ");
+      }
+
+      function resolveTitleText(explicitTitle, fallbackLabel, previousTitle) {
+        const fromTitle = sanitizeDisplayTitle(explicitTitle);
+        if (fromTitle) return fromTitle;
+        const fromLabel = titleCaseFromLabel(fallbackLabel);
+        if (fromLabel) return fromLabel;
+        const fromPrevious = sanitizeDisplayTitle(previousTitle);
+        if (fromPrevious && fromPrevious !== "Labeling...") return fromPrevious;
+        return "";
+      }
+
+      function resolveLabelText(explicitLabel, fallbackTitle, previousLabel) {
+        const fromLabel = titleCaseFromLabel(explicitLabel);
+        if (fromLabel) return fromLabel;
+        const fromTitle = sanitizeDisplayTitle(fallbackTitle);
+        if (fromTitle && fromTitle !== "Labeling...") return fromTitle;
+        const fromPrevious = sanitizeDisplayTitle(previousLabel);
+        if (fromPrevious && fromPrevious !== "Labeling...") return fromPrevious;
+        return "";
+      }
+
+      function renderResultTitles() {
+        previewTitle.textContent = previewLabelText || previewTitleText || "";
+      }
+
+      function updateFrontendUI() {
+        mode.style.display = "block";
+        previewColumn.style.display = "flex";
+        if (mode.value === "Background") {
+          previewCanvasText.textContent = "Background Output";
+        } else {
+          previewCanvasText.textContent = mode.value + " Subject";
+        }
+        renderResultTitles();
+      }
+
+      function showSubmitButton() {
+        const previewReady = previewRect[2] > 0 && previewRect[3] > 0;
+        const imageReady = !!(currentImage || selectedSourceImageUrl);
+        if (mode.value === "Background") {
+          submitButton.style.display = imageReady ? "block" : "none";
+          return;
+        }
+        submitButton.style.display = previewReady ? "block" : "none";
+      }
+
+      function drawCurrentImage() {
+        if (!currentImage) return;
+        mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+        mainCtx.drawImage(
+          currentImage,
+          0,
+          0,
+          currentImage.width,
+          currentImage.height,
+          offsetX,
+          offsetY,
+          currentImage.width * scale,
+          currentImage.height * scale,
+        );
+      }
+
+      function drawStoredRect() {
+        if (previewRect[2] <= 0 || previewRect[3] <= 0) return;
+        mainCtx.strokeStyle = "red";
+        mainCtx.lineWidth = 2;
+        mainCtx.strokeRect(previewRect[0], previewRect[1], previewRect[2], previewRect[3]);
+      }
+
+      function getImageSpaceRect(rect) {
+        if (!currentImage || !Array.isArray(rect) || rect.length !== 4) return null;
+        if (!Number.isFinite(scale) || scale <= 0) return null;
+        const [x, y, w, h] = rect;
+        if (w <= 0 || h <= 0) return null;
+
+        const sourceX = Math.max(0, Math.round((x - offsetX) / scale));
+        const sourceY = Math.max(0, Math.round((y - offsetY) / scale));
+        const maxWidth = currentImage.width - sourceX;
+        const maxHeight = currentImage.height - sourceY;
+        if (maxWidth <= 0 || maxHeight <= 0) return null;
+
+        const sourceWidth = Math.min(Math.max(1, Math.round(w / scale)), maxWidth);
+        const sourceHeight = Math.min(Math.max(1, Math.round(h / scale)), maxHeight);
+        if (sourceWidth <= 0 || sourceHeight <= 0) return null;
+
+        return { sourceX, sourceY, sourceWidth, sourceHeight };
+      }
+
+      function showLocalCropPreview(rect, targetCanvas) {
+        const crop = getImageSpaceRect(rect);
+        if (!crop) return;
+
+        const previewCtx = targetCanvas.getContext("2d");
+        const previewScale = Math.min(
+          targetCanvas.width / crop.sourceWidth,
+          targetCanvas.height / crop.sourceHeight,
+        );
+        const drawWidth = crop.sourceWidth * previewScale;
+        const drawHeight = crop.sourceHeight * previewScale;
+        const drawX = (targetCanvas.width - drawWidth) / 2;
+        const drawY = (targetCanvas.height - drawHeight) / 2;
+
+        previewCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+        previewCtx.drawImage(
+          currentImage,
+          crop.sourceX,
+          crop.sourceY,
+          crop.sourceWidth,
+          crop.sourceHeight,
+          drawX,
+          drawY,
+          drawWidth,
+          drawHeight,
+        );
+      }
+
+      function displaySubmitPreview(targetCanvas, url) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const ctx = targetCanvas.getContext("2d");
+            const fit = Math.min(targetCanvas.width / img.width, targetCanvas.height / img.height);
+            const drawWidth = img.width * fit;
+            const drawHeight = img.height * fit;
+            const x = (targetCanvas.width - drawWidth) / 2;
+            const y = (targetCanvas.height - drawHeight) / 2;
+            ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+            ctx.drawImage(img, x, y, drawWidth, drawHeight);
+            resolve();
+          };
+          img.onerror = () => resolve();
+          img.src = url;
+        });
+      }
+
+      async function playSteps(steps, targetCanvas) {
+        if (!Array.isArray(steps) || steps.length === 0) return;
+        for (const step of steps) {
+          if (!step || !step.url) continue;
+          await displaySubmitPreview(
+            targetCanvas,
+            "http://localhost:3000" + step.url + "?t=" + Date.now(),
+          );
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+      }
+
+      async function playStepsOnMainCanvas(steps) {
+        if (!Array.isArray(steps) || steps.length === 0) return;
+        for (const step of steps) {
+          if (!step || !step.url) continue;
+          await setMainImageFromUrl(
+            "http://localhost:3000" + step.url + "?t=" + Date.now(),
+            "existing",
+          );
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+      }
+
+      function setMainImageFromUrl(url, sourceType = "existing", revokeOnLoad = false) {
+        selectedSourceImageUrl = sourceType === "existing" ? url : "";
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.src = url;
+          img.onload = () => {
+            scale = Math.min(mainCanvas.width / img.width, mainCanvas.height / img.height);
+            offsetX = (mainCanvas.width - img.width * scale) / 2;
+            offsetY = (mainCanvas.height - img.height * scale) / 2;
+            currentImage = img;
+            drawCurrentImage();
+            drawStoredRect();
+            if (revokeOnLoad) URL.revokeObjectURL(url);
+            resolve(true);
+          };
+          img.onerror = () => {
+            if (revokeOnLoad) URL.revokeObjectURL(url);
+            resolve(false);
+          };
+        });
+      }
+
+      async function drawLibraryFromUrl(url) {
+        if (!url) return;
+        await displaySubmitPreview(libraryCanvas, url);
+      }
+
+      function requestLabelPreview() {
+        const hasUpload = !!(input.files && input.files[0]);
+        const hasExisting = !!selectedSourceImageUrl;
+        const previousTitle = previewTitleText;
+        const previousLabel = previewLabelText;
+        if (!hasUpload && !hasExisting) return;
+        if (!Array.isArray(previewRect) || previewRect[2] <= 0 || previewRect[3] <= 0) return;
+
+        const requestId = ++previewLabelRequestId;
+        previewTitleText = "Labeling...";
+        previewLabelText = "";
+        renderResultTitles();
+
+        const formData = new FormData();
+        formData.append("rect", JSON.stringify(previewRect));
+        formData.append("offsetX", offsetX);
+        formData.append("offsetY", offsetY);
+        formData.append("scale", scale);
+        if (hasExisting) formData.append("sourceImageUrl", selectedSourceImageUrl);
+        else if (hasUpload) formData.append("image", input.files[0]);
+
+        fetch("http://localhost:3000/api/label-preview", {
+          method: "POST",
+          body: formData,
+        })
+          .then((res) => {
+            if (!res.ok) throw new Error("Label preview failed");
+            return res.json();
+          })
+          .then((data) => {
+            if (requestId !== previewLabelRequestId) return;
+            previewTitleText = resolveTitleText(data.title, data.label, previousTitle);
+            previewLabelText = resolveLabelText(data.label, data.title, previousLabel);
+            renderResultTitles();
+          })
+          .catch(() => {
+            if (requestId !== previewLabelRequestId) return;
+            previewTitleText = resolveTitleText("", "", previousTitle);
+            previewLabelText = resolveLabelText("", "", previousLabel);
+            renderResultTitles();
+          });
+      }
+
+      function runRectExtract(subjectAccepted = false) {
+        const isExtractMode = mode.value === "Extract";
+        const isRemoveMode = mode.value === "Remove";
+        const isBackgroundMode = mode.value === "Background";
+        const hasUpload = !!(input.files && input.files[0]);
+        const hasExisting = !!selectedSourceImageUrl;
+        const previousTitle = previewTitleText;
+        const previousLabel = previewLabelText;
+        if (!hasUpload && !hasExisting) return;
+
+        const hasAddFile = !!(loadFileToAddButton.files && loadFileToAddButton.files[0]);
+
+        const formData = new FormData();
+        formData.append("PrimaryRec", JSON.stringify(previewRect));
+        formData.append("SecondaryRec", JSON.stringify([0, 0, 0, 0]));
+        formData.append("offsetX", offsetX);
+        formData.append("offsetY", offsetY);
+        formData.append("scale", scale);
+        formData.append("mode", mode.value);
+        formData.append("subjectAccepted", subjectAccepted ? "true" : "false");
+
+        if (hasExisting) formData.append("sourceImageUrl", selectedSourceImageUrl);
+        else if (hasUpload) formData.append("image", input.files[0]);
+
+        fetch("http://localhost:3000/api/rect-extract", {
+          method: "POST",
+          body: formData,
+        })
+          .then(async (res) => {
+            const contentType = (res.headers.get("content-type") || "").toLowerCase();
+            if (!res.ok) {
+              const raw = await res.text();
+              throw new Error(raw || "Request failed");
+            }
+            if (!contentType.includes("application/json")) {
+              const raw = await res.text();
+              throw new Error(raw || "Server returned a non-JSON response");
+            }
+            return res.json();
+          })
+          .then(async (data) => {
+            if (data && data.error) throw new Error(String(data.error));
+
+            const needsAcceptClick = isExtractMode && !!data.awaitingSubjectAcceptance;
+            previewTitleText = resolveTitleText(data.title, data.label, previousTitle);
+            previewLabelText = resolveLabelText(data.label, data.title, previousLabel);
+            renderResultTitles();
+
+            extendCleanupButton.style.display = needsAcceptClick ? "inline-block" : "none";
+
+            let previewSteps = Array.isArray(data.steps) ? data.steps : [];
+            if (isRemoveMode) {
+              previewSteps = previewSteps.filter((step) =>
+                /^1\.|^2\.|^3\./.test(String(step?.name || "")),
+              );
+            }
+
+            if (isExtractMode) {
+              latestExtractStepUrl = "";
+              const lastStepWithUrl = [...previewSteps].reverse().find((step) => step && step.url);
+              if (lastStepWithUrl) {
+                latestExtractStepUrl = String(lastStepWithUrl.url);
+                saveToFileButton.style.display = "inline-block";
+              } else {
+                saveToFileButton.style.display = "none";
+              }
+            } else {
+              saveToFileButton.style.display = "none";
+            }
+
+            await playSteps(previewSteps, previewCanvas);
+
+            if (isRemoveMode && Array.isArray(data.steps)) {
+              const removeSteps = data.steps.filter((step) => {
+                const name = String(step?.name || "");
+                return name.includes("Remove Mask") || name.includes("Remove Prep") || name.includes("Removed");
+              });
+              await playStepsOnMainCanvas(removeSteps);
+            } else if (isBackgroundMode && Array.isArray(data.steps)) {
+              const bgSteps = data.steps.filter((step) => {
+                const name = String(step?.name || "");
+                return name.includes("Background Cleaned");
+              });
+              await playStepsOnMainCanvas(bgSteps);
+            } 
+          })
+          .catch((error) => {
+            previewTitleText = resolveTitleText("", "", previousTitle);
+            previewLabelText = resolveLabelText("", "", previousLabel);
+            renderResultTitles();
+            console.error("rect-extract submit failed:", error);
+            const rawMessage = error && error.message ? String(error.message) : "Unknown error";
+            const cleanMessage = rawMessage.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+            const restartHint = /unexpected field/i.test(cleanMessage)
+              ? " Restart server.js so API changes are loaded."
+              : "";
+            alert("Submit failed. " + cleanMessage.slice(0, 260) + restartHint);
+          });
+      }
+
+      mode.addEventListener("change", () => {
+        const pCtx = previewCanvas.getContext("2d");
+        pCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+        previewRect = [0, 0, 0, 0];
+        previewTitleText = "";
+        previewLabelText = "";
+        previewLabelRequestId += 1;
+        latestExtractStepUrl = "";
+        drawCurrentImage();
+        updateFrontendUI();
+        extendCleanupButton.style.display = "none";
+        saveToFileButton.style.display = "none";
+        showSubmitButton();
+      });
+
+      submitButton.addEventListener("click", () => runRectExtract(false));
+      extendCleanupButton.addEventListener("click", () => {
+        if (mode.value !== "Extract") return;
+        previewRect = [0, 0, 0, 0];
+        drawStoredRect();
+        runRectExtract(true);
+      });
+
+      saveToFileButton.addEventListener("click", async () => {
+        if (!latestExtractStepUrl) return;
+        savedAddImageUrl = "http://localhost:3000" + latestExtractStepUrl + "?t=" + Date.now();
+        await drawLibraryFromUrl(savedAddImageUrl);
+        showSubmitButton();
+      });
+
+      loadFileToAddButton.addEventListener("change", async () => {
+        const file = loadFileToAddButton.files && loadFileToAddButton.files[0];
+        if (!file) return;
+        const localUrl = URL.createObjectURL(file);
+        savedAddImageUrl = localUrl;
+        await drawLibraryFromUrl(localUrl);
+        showSubmitButton();
+      });
+
+      input.addEventListener("change", () => {
+        if (!input.files || !input.files[0]) return;
+        previewTitleText = "";
+        previewLabelText = "";
+        latestExtractStepUrl = "";
+        renderResultTitles();
+        mode.style.display = "block";
+        extendCleanupButton.style.display = "none";
+        saveToFileButton.style.display = "none";
+        mode.dispatchEvent(new Event("change"));
+        const uploadUrl = URL.createObjectURL(input.files[0]);
+        setMainImageFromUrl(uploadUrl, "upload", true);
+        showSubmitButton();
+      });
+
+      mainCanvas.addEventListener("mousedown", (info) => {
+        if (info.button !== 0) return;
+        isDrawing = true;
+        previewRect = [0, 0, 0, 0];
+        drawStoredRect();
+        startX = info.offsetX;
+        startY = info.offsetY;
+      });
+
+      mainCanvas.addEventListener("mousemove", (info) => {
+        if (!isDrawing) return;
+        endX = info.offsetX;
+        endY = info.offsetY;
+        drawCurrentImage();
+        drawStoredRect();
+        const rectX = Math.min(startX, endX);
+        const rectY = Math.min(startY, endY);
+        const rectWidth = Math.abs(endX - startX);
+        const rectHeight = Math.abs(endY - startY);
+        mainCtx.strokeStyle = "red";
+        mainCtx.lineWidth = 2;
+        mainCtx.strokeRect(rectX, rectY, rectWidth, rectHeight);
+      });
+
+      mainCanvas.addEventListener("mouseup", (info) => {
+        if (info.button !== 0) return;
+        isDrawing = false;
+        endX = info.offsetX;
+        endY = info.offsetY;
+        const rectX = Math.min(startX, endX);
+        const rectY = Math.min(startY, endY);
+        const rectWidth = Math.abs(endX - startX);
+        const rectHeight = Math.abs(endY - startY);
+
+        if (rectWidth > 10 && rectHeight > 10) {
+          previewRect = [rectX, rectY, rectWidth, rectHeight];
+          drawCurrentImage();
+          drawStoredRect();
+          showLocalCropPreview(previewRect, previewCanvas);
+          requestLabelPreview();
+        } else {
+          previewRect = [0, 0, 0, 0];
+          drawCurrentImage();
+        }
+        showSubmitButton();
+      });
+    </script>
+  </body>
+</html>
